@@ -47,93 +47,54 @@ defmodule Nhf1 do
   @spec satrak(pd :: puzzle_desc) :: tss :: [tent_dirs]
   # tss a pd feladványleíróval megadott feladvány összes megoldásának listája, tetszőleges sorrendben
   def satrak(pd) do
-    traverse_trees(elem(pd, 2), [], pd, elem(pd, 0), elem(pd, 1))
+    combinations = traverse_trees(elem(pd, 2), [], pd)
   end
 
-  # recursively traverse through the trees, generating all possible tent directions and checking them
+  # recursively traverses through the trees, generating all possible tent directions and
+  # checking them during the process
   @spec traverse_trees(
           remaining_trees :: trees,
           tent_directions :: tent_dirs,
-          puzzle_description :: puzzle_desc,
-          remaining_positions_row :: tents_count_rows,
-          remaining_positions_col :: tents_count_cols
+          puzzle_description :: puzzle_desc
         ) ::
           tent_direction :: [tent_dirs]
 
-  # if at the end of recursion
-  def traverse_trees(
-        [],
-        tent_directions,
-        puzzle_description,
-        _,
-        _
-      ) do
-    a = check_sol(puzzle_description, tent_directions)
-    # if there is no error
+  # if at the end of recursion then check if the generated tent
+  # directions are valid and if correct return it in a list
+  # if not return an empty list
+  def traverse_trees([], tent_directions, puzzle_description) do
+    result = check_sol(puzzle_description, tent_directions)
 
-    if a == {%{err_rows: []}, %{err_cols: []}, %{err_touch: []}} do
-      # return the tent directions
+    if result == {%{err_rows: []}, %{err_cols: []}, %{err_touch: []}} do
       [tent_directions]
     else
-      # else return an empty list
       []
     end
   end
 
-  def traverse_trees(
-        remaining_trees,
-        tent_directions,
-        puzzle_description,
-        remaining_positions_row,
-        remaining_positions_col
-      ) do
-    # generating the possible tent positions while also checking if the tent is not out of bounds
+  # if not at the end of recursion then generate all valid tent positions
+  # and execute the next step of the recursion for the next tree given
+  # the generated directions
+  # returns a concatenated list of all the results returned by each nested recursion call
+  def traverse_trees(remaining_trees, tent_directions, puzzle_description) do
     tree_directions =
       [:w, :n, :e, :s]
       |> Enum.filter(fn dir ->
-        is_direction_valid?(
-          hd(remaining_trees),
-          dir,
-          puzzle_description,
-          tent_directions,
-          remaining_positions_row,
-          remaining_positions_col
-        )
+        is_direction_valid?(hd(remaining_trees), dir, puzzle_description, tent_directions)
       end)
 
     tree_directions
     |> Enum.map(fn dir ->
-      # gets the coordinates of the given tent
-      {{x, y}, _} = direction_shift(hd(remaining_trees), dir)
-
-      remaining_positions_row = decrement_at(remaining_positions_row, x)
-      remaining_positions_col = decrement_at(remaining_positions_col, y)
-
-      traverse_trees(
-        tl(remaining_trees),
-        tent_directions ++ [dir],
-        puzzle_description,
-        remaining_positions_row,
-        remaining_positions_col
-      )
+      # recursion happens here for each valid direction
+      traverse_trees(tl(remaining_trees), tent_directions ++ [dir], puzzle_description)
     end)
     |> Enum.reduce([], fn x, acc -> acc ++ x end)
   end
 
-  # decrements the list value at a given index by 1 (used remaining_positions_col/row)
-  defp decrement_at(list, index) do
-    List.replace_at(list, index - 1, Enum.at(list, index - 1) - 1)
-  end
-
-  # checks if the given direction is not outside of map and not already occupied
-  defp is_direction_valid?(
-         tree,
-         direction,
-         puzzle_description,
-         tent_directions,
-         remaining_positions_row,
-         remaining_positions_col
-       ) do
+  # checks if the tent placement is valid (not outside of n x m matrix; not already
+  # occupied by another tent)
+  # returns true if valid, false otherwise
+  defp is_direction_valid?(tree, direction, puzzle_description, tent_directions) do
     n = length(elem(puzzle_description, 0))
     m = length(elem(puzzle_description, 1))
 
@@ -141,13 +102,6 @@ defmodule Nhf1 do
 
     {{x, y}, _} = direction_shift(tree, direction)
 
-    # if the position exceeds column or row counts
-    if Enum.at(remaining_positions_row, x - 1) == 0 or
-         Enum.at(remaining_positions_col, y - 1) == 0 do
-      false
-    end
-
-    # check if the current coordinate is already occupied by a generated tent
     coordinate_is_occupied =
       Enum.zip(trees, tent_directions)
       |> Enum.map(fn {tree, direction} ->
@@ -158,7 +112,7 @@ defmodule Nhf1 do
     if coordinate_is_occupied do
       false
     else
-      # current coordinate is not occupied by another tent and it's not outside of the map
+      # check if outside of matrix
       if(x >= 1 and x <= n and y >= 1 and y <= m) do
         true
       else
